@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" width="400" height="400">
+  <!-- White background -->
+  <rect width="400" height="400" fill="#ffffff"/>
+
+  <!-- "Benefactor" text -->
+  <text x="36" y="140" font-family="'Inter','Helvetica Neue','Arial',sans-serif" font-size="62" font-weight="800" fill="#1e3a5f" letter-spacing="-1">Benefactor</text>
+
+  <!-- "Marketing" text -->
+  <text x="36" y="210" font-family="'Inter','Helvetica Neue','Arial',sans-serif" font-size="62" font-weight="800" fill="#1e3a5f" letter-spacing="-1">Marketing</text>
+
+  <!-- Red isosceles right triangle — bottom-right corner, hypotenuse faces northwest -->
+  <polygon points="400,400 400,280 280,400" fill="#e63946"/>
+</svg>
