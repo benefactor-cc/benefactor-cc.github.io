@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 280 92" role="img" aria-labelledby="title desc">
+  <title id="title">Benefactor Marketing</title>
+  <desc id="desc">Benefactor Marketing wordmark with a red accent mark.</desc>
+  <g fill="#f8fafc">
+    <text
+      x="0"
+      y="34"
+      font-family="'Helvetica Neue', Arial, sans-serif"
+      font-size="34"
+      font-weight="800"
+      letter-spacing="-1.2"
+    >
+      Benefactor
+    </text>
+    <text
+      x="0"
+      y="68"
+      font-family="'Helvetica Neue', Arial, sans-serif"
+      font-size="34"
+      font-weight="800"
+      letter-spacing="-1.2"
+    >
+      Marketing
+    </text>
+  </g>
+  <g transform="translate(206 44)">
+    <rect width="42" height="42" fill="#f8fafc" rx="2" />
+    <polygon points="0,0 42,0 0,42" fill="#e63946" />
+  </g>
+</svg>
