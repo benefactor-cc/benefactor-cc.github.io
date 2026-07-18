@@ -71,11 +71,17 @@ test("CNAME is the canonical domain and the site never ships javascript: links",
   }
 });
 
-test("outbound links open safely with noopener (reverse-tabnabbing hardening)", () => {
+test("outbound links open safely (reverse-tabnabbing hardening)", () => {
   // The repo history hardened external links; keep every target=_blank paired
-  // with rel=noopener so a new tab can't reach window.opener.
+  // with a rel that severs window.opener. Either noopener or noreferrer does
+  // this (noreferrer implies noopener), so accept both.
   const blankLinks = home.match(/<a\b[^>]*target="_blank"[^>]*>/gi) ?? [];
+  assert.ok(blankLinks.length > 0, "expected outbound target=_blank links on the home page");
   for (const tag of blankLinks) {
-    assert.match(tag, /rel="[^"]*noopener[^"]*"/i, `target=_blank without rel=noopener: ${tag}`);
+    assert.match(
+      tag,
+      /rel="[^"]*(noopener|noreferrer)[^"]*"/i,
+      `target=_blank without rel=noopener/noreferrer: ${tag}`,
+    );
   }
 });
