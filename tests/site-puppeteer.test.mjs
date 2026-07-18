@@ -59,7 +59,8 @@ test("puppeteer confirms in-page section anchors resolve to real targets", async
   assert.ok(anchors.includes("#services"), "nav is missing the #services anchor");
   for (const href of anchors) {
     const id = href.slice(1);
-    const exists = await page.$(`#${CSS.escape ? id : id}`);
+    // Section ids on this site are plain identifiers; assert existence by id.
+    const exists = await page.evaluate((x) => document.getElementById(x) !== null, id);
     assert.ok(exists, `anchor ${href} has no matching id in the DOM`);
   }
 });
