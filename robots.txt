@@ -1,5 +1,0 @@
-User-agent: *
-Allow: /
-Disallow: /internal/
-
-Sitemap: https://benefactor.cc/sitemap.xml
