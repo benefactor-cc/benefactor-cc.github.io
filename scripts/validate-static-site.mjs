@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
-import { dirname, extname, join, normalize, relative, resolve, sep } from 'node:path';
+import { dirname, extname, join, relative, resolve, sep } from 'node:path';
 import process from 'node:process';
 
 const root = resolve(process.cwd());
@@ -85,8 +85,8 @@ function validateHtml(file) {
     const href = attribute(value, 'href');
     const target = attribute(value, 'target');
     const rel = attribute(value, 'rel') ?? '';
-    if (target?.toLowerCase() === '_blank' && !/\bnoopener\b/i.test(rel)) {
-      fail(file, `external/new-tab link lacks rel="noopener": ${href ?? '<missing href>'}`);
+    if (target?.toLowerCase() === '_blank' && !/\b(?:noopener|noreferrer)\b/i.test(rel)) {
+      fail(file, `new-tab link lacks rel="noopener" or rel="noreferrer": ${href ?? '<missing href>'}`);
     }
     validateReference(file, value, 'href');
   }
