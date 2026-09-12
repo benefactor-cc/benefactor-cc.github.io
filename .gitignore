@@ -2,3 +2,15 @@
 # Local temporary directories and repository-owned worktrees
 tmp/
 temp/
+tmp
+temp
+tmp/worktrees
+temp/worktrees
+# env-crypto: decrypted secrets, never committed
+env/dec/
+# ...but the ENCRYPTED files must be committable. A broad `.env.*` rule
+# elsewhere in this file would otherwise match env/enc/.env.enc by
+# basename and silently exclude it.
+!env/enc/**
+# scratch: files this sandbox could not unlink; safe to delete by hand
+_to_delete/
