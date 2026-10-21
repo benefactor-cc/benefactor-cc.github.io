@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://benefactor.cc/sitemap.xml
