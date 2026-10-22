@@ -52,6 +52,28 @@ jobs:
     permissions:
       contents: read
     steps:
+      - name: Require successful source CI for this exact SHA
+        shell: bash
+        env:
+          SOURCE_SHA: ${{ needs.inspect.outputs.source_sha }}
+        run: |
+          set -euo pipefail
+          [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]] || exit 1
+          curl --fail --silent --show-error --location --retry 3 \
+            -H 'Accept: application/vnd.github+json' \
+            -H 'User-Agent: benefactor-public-pages-sync' \
+            "https://api.github.com/repos/ORESoftware/benefactor.cc/actions/runs?head_sha=$SOURCE_SHA&per_page=100" \
+            -o "$RUNNER_TEMP/source-ci-runs.json"
+          jq -e --arg sha "$SOURCE_SHA" '
+            [.workflow_runs[] |
+              select(.head_sha == $sha and .status == "completed" and .conclusion == "success")
+              | .name] as $passed |
+              ($passed | index("ci") != null) and
+              ($passed | index("Frontend CI / production artifact") != null)
+          ' "$RUNNER_TEMP/source-ci-runs.json" >/dev/null || {
+            echo 'Refusing production deployment without both successful source CI workflows.' >&2
+            exit 1
+          }
       - name: Checkout exact public Astro source (no cross-org token required)
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
