@@ -1,0 +1,183 @@
+name: Sync public Benefactor source to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+    paths: [.github/workflows/sync-public-source.yml]
+  schedule:
+    - cron: '17,47 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: benefactor-public-site-sync
+  cancel-in-progress: false
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      source_sha: ${{ steps.source.outputs.sha }}
+      changed: ${{ steps.source.outputs.changed }}
+    steps:
+      - name: Checkout Pages repository (read-only)
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Resolve exact public source HEAD
+        id: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          sha="$(git -c credential.helper= ls-remote https://github.com/ORESoftware/benefactor.cc.git refs/heads/main | cut -f1)"
+          [[ "$sha" =~ ^[0-9a-f]{40}$ ]] || { echo 'Invalid source HEAD' >&2; exit 1; }
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          previous="$(cat site-source-sha.txt 2>/dev/null || true)"
+          if [[ "$previous" == "$sha" ]]; then
+            echo 'changed=false' >> "$GITHUB_OUTPUT"
+            echo "Already published exact source $sha"
+          else
+            echo 'changed=true' >> "$GITHUB_OUTPUT"
+            echo "Source change detected: $sha"
+          fi
+
+  build:
+    needs: inspect
+    if: needs.inspect.outputs.changed == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout exact public Astro source (no cross-org token required)
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: ORESoftware/benefactor.cc
+          ref: ${{ needs.inspect.outputs.source_sha }}
+          path: upstream
+          persist-credentials: false
+      - name: Verify checked-out Git tree
+        working-directory: upstream
+        env:
+          EXPECTED_SOURCE_SHA: ${{ needs.inspect.outputs.source_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SOURCE_SHA"
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: upstream/package-lock.json
+      - name: Install, test and security audit
+        working-directory: upstream
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci --ignore-scripts
+          npm test
+          npm audit --omit=dev
+      - name: Build the exact source SHA for benefactor.cc
+        working-directory: upstream
+        env:
+          CUSTOM_DOMAIN: benefactor.cc
+          PUBLIC_SUPABASE_URL: ${{ vars.PUBLIC_SUPABASE_URL }}
+          PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ vars.PUBLIC_SUPABASE_PUBLISHABLE_KEY }}
+          PUBLIC_BENEFACTOR_GIT_SHA: ${{ needs.inspect.outputs.source_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          release_date="$(TZ=America/New_York date +%Y-%m-%d)"
+          export PUBLIC_BENEFACTOR_RELEASE_DATE="$release_date"
+          export PUBLIC_BENEFACTOR_CALVER="${release_date//-/.}"
+          npm run build
+          node --test tests/site-discovery.buildcheck.mjs
+          printf '%s\n' "$PUBLIC_BENEFACTOR_GIT_SHA" > dist/site-source-sha.txt
+          test -f dist/.nojekyll
+          test "$(cat dist/CNAME)" = 'benefactor.cc'
+          test -s dist/sitemap.xml
+          test -s dist/robots.txt
+          if find dist -type l | grep -q .; then
+            echo 'Refusing symlinks in static artifact' >&2
+            exit 1
+          fi
+      - name: Upload validated static artifact (including .nojekyll)
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: benefactor-site
+          path: upstream/dist/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 2
+
+  publish:
+    needs: [inspect, build]
+    if: needs.build.result == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout production Pages repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: true
+      - name: Download validated artifact
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: benefactor-site
+          path: staging
+      - name: Check artifact provenance and upstream freshness
+        shell: bash
+        env:
+          SOURCE_SHA: ${{ needs.inspect.outputs.source_sha }}
+        run: |
+          set -euo pipefail
+          [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]] || exit 1
+          test "$(cat staging/site-source-sha.txt)" = "$SOURCE_SHA"
+          test "$(cat staging/CNAME)" = 'benefactor.cc'
+          test -f staging/.nojekyll
+          test -s staging/sitemap.xml
+          test -s staging/robots.txt
+          if find staging -type l | grep -q .; then
+            echo 'Unexpected symlink in release artifact' >&2
+            exit 1
+          fi
+          current="$(git -c credential.helper= ls-remote https://github.com/ORESoftware/benefactor.cc.git refs/heads/main | cut -f1)"
+          test "$current" = "$SOURCE_SHA" || {
+            echo 'Source main advanced during build; defer stale deployment.' >&2
+            exit 1
+          }
+      - name: Publish only validated static output, preserve workflow
+        shell: bash
+        env:
+          SOURCE_SHA: ${{ needs.inspect.outputs.source_sha }}
+        run: |
+          set -euo pipefail
+          rsync -a --delete --exclude='.git/' --exclude='.github/' staging/ ./
+          git config user.name benefactor-release-bot
+          git config user.email benefactor-release-bot@users.noreply.github.com
+          git add -A
+          if git diff --cached --quiet; then
+            echo 'No static changes.'
+            exit 0
+          fi
+          git commit -m "deploy: publish validated public source ${SOURCE_SHA:0:12}"
+          git push origin HEAD:main
+      - name: Check public sitemap and robots discovery
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 24); do
+            if curl -fsSL --max-time 15 'https://benefactor.cc/sitemap.xml' | grep -Fq '<loc>https://benefactor.cc/blogs/' \
+              && curl -fsSL --max-time 15 'https://benefactor.cc/robots.txt' | grep -Fq 'Sitemap: https://benefactor.cc/sitemap.xml'; then
+              echo 'Both public discovery resources are available.'
+              exit 0
+            fi
+            sleep 5
+          done
+          echo 'Public sitemap/robots verification failed' >&2
+          exit 1
