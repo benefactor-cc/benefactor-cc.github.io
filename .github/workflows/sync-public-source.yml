@@ -105,6 +105,11 @@ jobs:
             echo 'Refusing symlinks in static artifact' >&2
             exit 1
           fi
+      - name: Upload official GitHub Pages deployment artifact
+        uses: actions/upload-pages-artifact@7b1f4a764d45c48632c6b24a0339c27f5614fb0b # v4
+        with:
+          path: upstream/dist/
+
       - name: Upload validated static artifact (including .nojekyll)
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
@@ -120,6 +125,11 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - name: Checkout production Pages repository
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -129,7 +139,7 @@ jobs:
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: benefactor-site
-          path: staging
+          path: ${{ runner.temp }}/benefactor-site
       - name: Check artifact provenance and upstream freshness
         shell: bash
         env:
@@ -137,11 +147,11 @@ jobs:
         run: |
           set -euo pipefail
           [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]] || exit 1
-          test "$(cat staging/site-source-sha.txt)" = "$SOURCE_SHA"
-          test "$(cat staging/CNAME)" = 'benefactor.cc'
-          test -f staging/.nojekyll
-          test -s staging/sitemap.xml
-          test -s staging/robots.txt
+          test "$(cat $RUNNER_TEMP/benefactor-site/site-source-sha.txt)" = "$SOURCE_SHA"
+          test "$(cat $RUNNER_TEMP/benefactor-site/CNAME)" = 'benefactor.cc'
+          test -f $RUNNER_TEMP/benefactor-site/.nojekyll
+          test -s $RUNNER_TEMP/benefactor-site/sitemap.xml
+          test -s $RUNNER_TEMP/benefactor-site/robots.txt
           if find staging -type l | grep -q .; then
             echo 'Unexpected symlink in release artifact' >&2
             exit 1
@@ -157,7 +167,8 @@ jobs:
           SOURCE_SHA: ${{ needs.inspect.outputs.source_sha }}
         run: |
           set -euo pipefail
-          rsync -a --delete --exclude='.git/' --exclude='.github/' staging/ ./
+          # Artifact lives outside this checkout so --delete cannot remove its source.
+          rsync -a --delete --exclude='.git/' --exclude='.github/' "$RUNNER_TEMP/benefactor-site/" ./
           git config user.name benefactor-release-bot
           git config user.email benefactor-release-bot@users.noreply.github.com
           git add -A
@@ -167,6 +178,10 @@ jobs:
           fi
           git commit -m "deploy: publish validated public source ${SOURCE_SHA:0:12}"
           git push origin HEAD:main
+      - name: Deploy validated artifact using official GitHub Pages API
+        id: deployment
+        uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e # v4
+
       - name: Check public sitemap and robots discovery
         shell: bash
         run: |
