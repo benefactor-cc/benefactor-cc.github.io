@@ -109,6 +109,7 @@ jobs:
           CUSTOM_DOMAIN: benefactor.cc
           PUBLIC_SUPABASE_URL: ${{ vars.PUBLIC_SUPABASE_URL }}
           PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ vars.PUBLIC_SUPABASE_PUBLISHABLE_KEY }}
+          PUBLIC_BENEFACTOR_TURNSTILE_SITE_KEY: ${{ vars.PUBLIC_BENEFACTOR_TURNSTILE_SITE_KEY }}
           PUBLIC_BENEFACTOR_GIT_SHA: ${{ needs.inspect.outputs.source_sha }}
         shell: bash
         run: |
