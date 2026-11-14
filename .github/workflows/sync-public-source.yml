@@ -169,12 +169,13 @@ jobs:
         run: |
           set -euo pipefail
           [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]] || exit 1
-          test "$(cat $RUNNER_TEMP/benefactor-site/site-source-sha.txt)" = "$SOURCE_SHA"
+          test "$(cat "$RUNNER_TEMP/benefactor-site/site-source-sha.txt")" = "$SOURCE_SHA"
           test "$(cat $RUNNER_TEMP/benefactor-site/CNAME)" = 'benefactor.cc'
           test -f $RUNNER_TEMP/benefactor-site/.nojekyll
           test -s $RUNNER_TEMP/benefactor-site/sitemap.xml
           test -s $RUNNER_TEMP/benefactor-site/robots.txt
-          if find staging -type l | grep -q .; then
+          # Validate the downloaded artifact, not a nonexistent staging path.
+          if find "$RUNNER_TEMP/benefactor-site" -type l -print -quit | grep -q .; then
             echo 'Unexpected symlink in release artifact' >&2
             exit 1
           fi
